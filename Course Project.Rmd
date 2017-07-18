@@ -1,0 +1,119 @@
+---
+title: "Practical Machine Learning - Course Project"
+author: "David Jensen"
+date: "July 17, 2017"
+output: html_document
+---
+
+
+
+## Introduction
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. 
+
+
+## Data Preprocessing
+
+```{r, echo=TRUE}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+library(corrplot)
+library(rattle)
+```
+
+Prepare the Data:
+
+```{r, echo=TRUE}
+#set the working directory where the data reside and read in the data
+setwd("C:/Practical Machine Learning")
+testFile <- read.csv("pml-testing.csv", header = TRUE)
+trainFile <- read.csv("pml-training.csv", header=TRUE)
+```
+
+By using the str function (not shown here for brevity) it is noticed there are a large number of variables that contain nothing missing values and can be deleted from the datasets.
+
+```{r, echo=TRUE}
+trainfinal <- trainFile[, colSums(is.na(trainFile)) == 0] 
+testfinal <- testFile[, colSums(is.na(testFile)) == 0]
+```
+
+```{r, echo=TRUE}
+classe <- trainfinal$classe
+remtrain <- grepl("^X|timestamp|window", names(trainfinal))
+trainfinal <- trainfinal[, !remtrain]
+trainfinal2 <- trainfinal[, sapply(trainfinal, is.numeric)]
+trainfinal2$classe <- classe
+remtest <- grepl("^X|timestamp|window", names(testfinal))
+testfinal <- testfinal[, !remtest]
+testfinal2 <- testfinal[, sapply(testfinal, is.numeric)]
+```
+
+## Prepare Data for Modeling
+
+Split the data into training and testing datasets
+
+```{r, echo=TRUE}
+seed <- as.numeric(as.Date("2017-07-17"))
+set.seed(seed)
+inTrain <- createDataPartition(trainfinal2$classe, p=0.7, list=F)
+traindata <- trainfinal2[inTrain, ]
+testdata <- trainfinal2[-inTrain, ]
+```
+
+##  Data Modeling
+
+Fitting a predictive model using random forest.  This should be particularly appropriate as it selects important explanatory variables.  Use 5-fold cross validation.
+
+```{r, echo=TRUE}
+library(e1071)
+controltrain <- trainControl(method="cv", 5)
+rfmodel1 <- train(classe ~ ., data=traindata, method="rf", trControl=controltrain, ntree=250)
+rfmodel1
+```
+
+Test the model on the test set
+
+```{r, echo=TRUE}
+predictmod <- predict(rfmodel1, testdata)
+confusionMatrix(testdata$classe, predictmod)
+```
+
+Do calculations for accuracy and out of sample error
+
+```{r, echo=TRUE}
+modelaccurate <- postResample(predictmod, testdata$classe)
+modelaccurate
+```
+
+Accuracy of the model is estimated to be 99.24%
+
+```{r, echo=TRUE}
+outsampleerror <- 1 - as.numeric(confusionMatrix(testdata$classe, predictmod)$overall[1])
+outsampleerror
+```
+
+So, the out-of-sample error is estimated to be .76%
+
+## Test Data Set Predictions
+
+This section will make predictions as to what each of the observations in the test data set should be grouped into
+
+```{r, echo=TRUE}
+result <- predict(rfmodel1, testfinal2[, -length(names(testfinal2))])
+result
+```
+
+##Appendix (Figures):
+
+```{r, echo=TRUE}
+cmatrix <- cor(traindata[, -length(names(traindata))])
+corrplot(cmatrix, method="color")
+```
+
+```{r, echo=TRUE}
+treediagram <- rpart(classe ~ ., data=traindata, method="class")
+prp(treediagram)
+fancyRpartPlot(treediagram)
+```
